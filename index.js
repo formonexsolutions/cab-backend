@@ -4,7 +4,7 @@ const db=require('./app/config/db');
 const authRoutes = require('./app/routes/authRoutes');
 const SessionMiddleware = require('./app/middleware/seessionMiddleware');
 const path = require('path');
-
+const cors=require('cors')
 
 const swaggerUi = require('swagger-ui-express');
 const { userOption } = require('./app/config/swagger');
@@ -14,7 +14,7 @@ const port= 3000;
 
 db();
 
-
+app.use(cors())
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
