@@ -3,6 +3,8 @@ const Otp = require('../models/Otp');
 const saveBase64File = require('../utils/saveBase64File');
 const jwt = require('jsonwebtoken');
 const base64Response = require('../utils/base64Response');
+const twilio = require('twilio');
+const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 
 const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -52,7 +54,12 @@ exports.register = async (req, res) => {
     await Otp.create({ phone, otp, otpExpiry });
 
     // TODO: send OTP using Twilio here
-    console.log(`OTP for ${phone}: ${otp}`);
+    // Send OTP via Twilio
+    await client.messages.create({
+      body: `Your verification OTP is: ${otp}`,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to: phone,
+    });
 
    res.status(200).send(base64Response({ message: 'OTP sent successfully', phone }));
   } catch (error) {
@@ -134,7 +141,12 @@ exports.login = async (req, res) => {
     await Otp.create({ phone, otp, otpExpiry });
 
     // TODO: Send OTP via Twilio
-    console.log(`Login OTP for ${phone}: ${otp}`);
+     // Send OTP via Twilio
+    await client.messages.create({
+      body: `Your login OTP is: ${otp}`,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to:phone,
+    });
 
     res.status(200).send(base64Response({ message: 'OTP sent successfully', phone }));
   } catch (error) {

@@ -6,15 +6,17 @@ const authMiddleware = require('../middleware/authmiddleware');
 
 /**
  * @swagger
- * tags:
- *   name: Authentication
- *   description: API for user registration, login, and authentication
+ * components:
+ *   securitySchemes:
+ *     bearerAuth:
+ *       type: http
+ *       scheme: bearer
+ *       bearerFormat: JWT
  */
-
 
 /**
  * @swagger
- * /auth/register:
+ * /api/auth/register:
  *   post:
  *     summary: Register a new user (with OTP generation)
  *     tags: [Authentication]
@@ -34,19 +36,10 @@ const authMiddleware = require('../middleware/authmiddleware');
  *                 example: John Doe
  *               phone:
  *                 type: string
- *                 example: "9999999999"
+ *                 example: "+919999999999"
  *               role:
  *                 type: string
  *                 enum: [passenger, driver, admin]
- *               license:
- *                 type: string
- *                 description: Base64 string for driver license (driver role only)
- *               policeVerification:
- *                 type: string
- *               carFront:
- *                 type: string
- *               carBack:
- *                 type: string
  *     responses:
  *       200:
  *         description: OTP sent successfully
@@ -57,7 +50,7 @@ router.post('/register', register);
 
 /**
  * @swagger
- * /auth/verify-otp:
+ * /api/auth/verify-otp:
  *   post:
  *     summary: Verify OTP and return JWT token
  *     tags: [Authentication]
@@ -86,7 +79,7 @@ router.post('/verify-otp', verifyOtp);
 
 /**
  * @swagger
- * /auth/login:
+ * /api/auth/login:
  *   post:
  *     summary: Login using phone number (OTP sent)
  *     tags: [Authentication]
@@ -110,7 +103,7 @@ router.post('/login', login);
 
 /**
  * @swagger
- * /auth/auth-user:
+ * /api/auth/auth-user:
  *   get:
  *     summary: Get authenticated user details
  *     tags: [Authentication]
