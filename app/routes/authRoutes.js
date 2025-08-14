@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { register, verifyOtp, login, getAuthUser } = require('../controllers/authController');
+const { register, verifyOtp, login, getAuthUser, logout } = require('../controllers/authController');
 const authMiddleware = require('../middleware/authmiddleware');
 
 
@@ -115,6 +115,31 @@ router.post('/login', login);
  */
 
 router.get('/auth-user', authMiddleware, getAuthUser);
+
+/**
+ * @swagger
+ * /api/auth/logout:
+ *   post:
+ *     summary: Logout the authenticated user (JWT Blacklist)
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Logged out successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Logged out successfully
+ *       401:
+ *         description: Unauthorized - Invalid or missing token
+ */
+router.post('/logout', authMiddleware, logout);
+
 
 module.exports = router;
 

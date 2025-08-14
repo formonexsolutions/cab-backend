@@ -2,6 +2,7 @@ const User = require('../models/User');
 const Otp = require('../models/Otp');
 const saveBase64File = require('../utils/saveBase64File');
 const jwt = require('jsonwebtoken');
+const TokenBlacklist = require('../models/TokenBlacklist');
 const base64Response = require('../utils/base64Response');
 const twilio = require('twilio');
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
@@ -167,6 +168,22 @@ exports.getAuthUser = async (req, res) => {
         isVerified: user.isVerified
       })
     );
+  } catch (error) {
+    console.error(error);
+    res.status(500).send(base64Response({ message: 'Server error' }));
+  }
+};
+exports.logout = async (req, res) => {
+  try {
+    const token = req.token; 
+    const decoded = jwt.decode(token);
+
+    if (decoded && decoded.exp) {
+      const expiryDate = new Date(decoded.exp * 1000);
+      await TokenBlacklist.create({ token, expiry: expiryDate });
+    }
+
+    res.status(200).send(base64Response({ message: 'Logged out successfully' }));
   } catch (error) {
     console.error(error);
     res.status(500).send(base64Response({ message: 'Server error' }));
