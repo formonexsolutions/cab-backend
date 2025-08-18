@@ -173,6 +173,80 @@ exports.getAuthUser = async (req, res) => {
     res.status(500).send(base64Response({ message: 'Server error' }));
   }
 };
+
+exports.updateAuthUser = async (req, res) => {
+  try {
+    const userId = req.user._id; // comes from authMiddleware
+    const { name, role, phone, license, policeVerification, carFront, carBack } = req.body;
+
+    let user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).send(base64Response({ message: 'User not found' }));
+    }
+
+    // Update normal fields
+    if (name) user.name = name;
+    if (role && ['passenger', 'driver', 'admin'].includes(role)) {
+      user.role = role;
+    }
+
+    let message = "User updated successfully";
+
+    // ✅ If phone is changed, trigger OTP verification
+    if (phone && phone !== user.phone) {
+      const otp = generateOTP();
+      const otpExpiry = Date.now() + 5 * 60 * 1000;
+
+      // Remove old OTPs for that new phone
+      await Otp.deleteMany({ phone });
+
+      // Save new OTP
+      await Otp.create({ phone, otp, otpExpiry });
+
+      // Send OTP via Twilio
+      await client.messages.create({
+        body: `Your OTP to update phone is: ${otp}`,
+        from: process.env.TWILIO_PHONE_NUMBER,
+        to: phone,
+      });
+
+      // Save new phone temporarily
+      user.phone = phone;
+      user.isVerified = false; // force re-verification
+      message = "Phone number updated, please verify OTP sent to new number";
+    }
+
+    // Update driver documents if applicable
+    if (user.role === 'driver') {
+      if (license) user.documents.license = saveBase64File(license, 'drivers', 'license');
+      if (policeVerification) user.documents.policeVerification = saveBase64File(policeVerification, 'drivers', 'policeVerification');
+      if (carFront) user.documents.carFront = saveBase64File(carFront, 'drivers', 'carFront');
+      if (carBack) user.documents.carBack = saveBase64File(carBack, 'drivers', 'carBack');
+    }
+
+    await user.save();
+
+    res.status(200).send(
+      base64Response({
+        message,
+        user: {
+          id: user._id,
+          name: user.name,
+          phone: user.phone,
+          role: user.role,
+          isVerified: user.isVerified,
+          pendingPhone: user.pendingPhone || null
+        }
+      })
+    );
+  } catch (error) {
+    console.error(error);
+    res.status(500).send(base64Response({ message: 'Server error' }));
+  }
+};
+
+
+
 exports.logout = async (req, res) => {
   try {
     const token = req.token; 
