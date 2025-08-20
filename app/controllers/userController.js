@@ -36,7 +36,7 @@ exports.getUsersByRole = async (req, res) => {
 // Update Auth User Location
 exports.updateUserLocation = async (req, res) => {
   try {
-    const userId = req.user._id; // from authMiddleware
+    const userId = req.user._id;
     const { latitude, longitude } = req.body;
 
     if (!latitude || !longitude) {
@@ -48,20 +48,17 @@ exports.updateUserLocation = async (req, res) => {
       return res.status(404).send(base64Response({ message: 'User not found' }));
     }
 
-    // Update location
-    user.location = { latitude, longitude };
+    user.location = {
+      type: "Point",
+      coordinates: [longitude, latitude] // order: [lng, lat]
+    };
+
     await user.save();
 
     res.status(200).send(
       base64Response({
         message: 'Location updated successfully',
-        user: {
-          id: user._id,
-          name: user.name,
-          phone: user.phone,
-          role: user.role,
-          location: user.location
-        }
+        location: user.location
       })
     );
   } catch (error) {
@@ -69,4 +66,38 @@ exports.updateUserLocation = async (req, res) => {
     res.status(500).send(base64Response({ message: 'Server error' }));
   }
 };
+
+exports.getNearbyDrivers = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const user = await User.findById(userId);
+
+    if (!user || !user.location || !user.location.coordinates) {
+      return res.status(400).send(base64Response({ message: 'User location not set' }));
+    }
+
+    const [lng, lat] = user.location.coordinates;
+
+    const drivers = await User.find({
+      role: 'driver',
+      location: {
+        $near: {
+          $geometry: { type: "Point", coordinates: [lng, lat] },
+          $maxDistance: 100 // distance in meters
+        }
+      }
+    });
+
+    res.status(200).send(
+      base64Response({
+        message: 'Nearby drivers fetched successfully',
+        drivers
+      })
+    );
+  } catch (error) {
+    console.error(error);
+    res.status(500).send(base64Response({ message: 'Server error' }));
+  }
+};
+
 

@@ -1,25 +1,30 @@
-
 const mongoose = require('mongoose');
 
-const userSchema = new mongoose.Schema({
+const UserSchema = new mongoose.Schema({
   name: { type: String, required: true },
-  phone: { type: String, required: true, unique: true, trim: true },
-  role: { type: String, enum: ['passenger', 'driver', 'admin'], default: 'passenger' },
+  phone: { type: String, required: true, unique: true },
+  role: { type: String, enum: ['passenger', 'driver', 'admin'], required: true },
+  isVerified: { type: Boolean, default: false },
   documents: {
     license: String,
     policeVerification: String,
     carFront: String,
     carBack: String
   },
-  isVerified: { type: Boolean, default: false },
-  otp: String,
-  otpExpiry: Date,
-  createdAt: { type: Date, default: Date.now },
-
   location: {
-    latitude: { type: Number, default: null },
-    longitude: { type: Number, default: null }
+    type: {
+      type: String,
+      enum: ['Point'],
+      default: 'Point'
+    },
+    coordinates: {
+      type: [Number], // [longitude, latitude]
+      default: [0, 0]
+    }
   }
 }, { timestamps: true });
 
-module.exports = mongoose.model('User', userSchema);
+// Create 2dsphere index for geospatial queries
+UserSchema.index({ location: "2dsphere" });
+
+module.exports = mongoose.model('User', UserSchema);
