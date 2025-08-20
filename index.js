@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const db=require('./app/config/db');
 const authRoutes = require('./app/routes/authRoutes');
+const userRoutes = require('./app/routes/userRoutes');
 const SessionMiddleware = require('./app/middleware/seessionMiddleware');
 const path = require('path');
 const cors=require('cors')
@@ -28,6 +29,7 @@ app.use(SessionMiddleware);
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
 
 //swagger
 app.use('/api-docs', swaggerUi.serve, (req, res) => {
