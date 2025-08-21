@@ -18,7 +18,7 @@ const authMiddleware = require('../middleware/authmiddleware');
  * @swagger
  * /api/auth/register:
  *   post:
- *     summary: Register a new user (with OTP generation)
+ *     summary: Register a new user and generate OTP for verification
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -29,21 +29,78 @@ const authMiddleware = require('../middleware/authmiddleware');
  *             required:
  *               - name
  *               - phone
+ *               - email
  *               - role
  *             properties:
  *               name:
  *                 type: string
+ *                 description: Full name of the user
  *                 example: John Doe
  *               phone:
  *                 type: string
+ *                 description: User's phone number with country code
  *                 example: "+919999999999"
+ *               email:
+ *                 type: string
+ *                 description: Email address of the user
+ *                 example: "johndoe@example.com"
  *               role:
  *                 type: string
  *                 enum: [passenger, driver, admin]
+ *                 description: Role of the user
+ *                 example: "driver"
+ *               license:
+ *                 type: string
+ *                 format: base64
+ *                 description: Base64-encoded driver's license image (required for drivers)
+ *               policeVerification:
+ *                 type: string
+ *                 format: base64
+ *                 description: Base64-encoded police verification document (required for drivers)
+ *               carFront:
+ *                 type: string
+ *                 format: base64
+ *                 description: Base64-encoded front image of the car (required for drivers)
+ *               carBack:
+ *                 type: string
+ *                 format: base64
+ *                 description: Base64-encoded back image of the car (required for drivers)
  *     responses:
  *       200:
  *         description: OTP sent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "OTP sent successfully"
+ *                 phone:
+ *                   type: string
+ *                   example: "+919999999999"
+ *       400:
+ *         description: Missing or invalid data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Driver documents are required and must be valid base64"
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Server error"
  */
+
 
 router.post('/register', register);
 

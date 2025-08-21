@@ -1,20 +1,21 @@
-const User = require('../models/User');
 const Otp = require('../models/Otp');
 const saveBase64File = require('../utils/saveBase64File');
 const jwt = require('jsonwebtoken');
 const TokenBlacklist = require('../models/TokenBlacklist');
 const base64Response = require('../utils/base64Response');
 const twilio = require('twilio');
+const User = require('../models/User');
+
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 
 const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
 
 exports.register = async (req, res) => {
   try {
-    const { name, phone, role, license, policeVerification, carFront, carBack } = req.body;
+    const { name, phone, email, role, license, policeVerification, carFront, carBack } = req.body;
 
-    if (!name || !phone || !role) {
-      return res.status(400).json({ message: 'Name, phone, and role are required' });
+    if (!name || !phone || !role || !email) {
+      return res.status(400).json({ message: 'Name, phone, role, and email are required' });
     }
     if (!['passenger', 'driver', 'admin'].includes(role)) {
       return res.status(400).json({ message: 'Invalid role' });
@@ -22,7 +23,7 @@ exports.register = async (req, res) => {
 
     let user = await User.findOne({ phone });
     if (!user) {
-      user = new User({ name, phone, role });
+      user = new User({ name, phone, role, email, driver: role === 'driver' ? { status: 'offline', verificationStatus: 'pending' } : undefined });
     }
 
     if (role === 'driver') {
@@ -158,15 +159,15 @@ exports.login = async (req, res) => {
 
 exports.getAuthUser = async (req, res) => {
   try {
-    const user = req.user; // set by authMiddleware
+    const userId = req.user._id; 
+  
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).send(base64Response({ message: 'User not found' }));
+    }
+
     res.status(200).send(
-      base64Response({
-        id: user._id,
-        name: user.name,
-        phone: user.phone,
-        role: user.role,
-        isVerified: user.isVerified
-      })
+      base64Response(user)
     );
   } catch (error) {
     console.error(error);
@@ -177,7 +178,7 @@ exports.getAuthUser = async (req, res) => {
 exports.updateAuthUser = async (req, res) => {
   try {
     const userId = req.user._id; // comes from authMiddleware
-    const { name, role, phone, license, policeVerification, carFront, carBack } = req.body;
+    const { name, role, phone, email, license, policeVerification, carFront, carBack } = req.body;
 
     let user = await User.findById(userId);
     if (!user) {
@@ -186,6 +187,7 @@ exports.updateAuthUser = async (req, res) => {
 
     // Update normal fields
     if (name) user.name = name;
+    if (email) user.email = email;
     if (role && ['passenger', 'driver', 'admin'].includes(role)) {
       user.role = role;
     }
