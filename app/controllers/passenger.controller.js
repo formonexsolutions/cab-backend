@@ -10,9 +10,9 @@ const { emitToUser } = require('../config/socket');
 const { getDistance } = require('geolib');
 // Example mapping: You can make this dynamic (DB or config file)
 const vehicleCategories = {
-  Economy: ['Suzuki', 'Hyundai', 'Tata', 'Mahindra'],
-  Premium: ['BMW', 'Audi', 'Mercedes', 'Tesla'],
-  Carpool: ['Innova', 'Ertiga', 'Tavera']
+  Economy: (process.env.VEHICLE_ECONOMY || '').split(','),
+  Premium: (process.env.VEHICLE_PREMIUM || '').split(','),
+  Carpool: (process.env.VEHICLE_CARPOOL || '').split(',')
 };
 
 
@@ -109,18 +109,13 @@ const requestRide = asyncHandler(async (req, res) => {
   const durationMin = Math.max(10, Math.round(distanceKm * 2));
   const fare = calculateFare({ distanceKm, durationMin, surgeMultiplier });
 
-  // Find nearby drivers by category
-  const categoryMap = {
-    Economy: ['Suzuki', 'Hyundai', 'Tata', 'Mahindra'],
-    Premium: ['BMW', 'Audi', 'Mercedes', 'Tesla'],
-    Carpool: ['Innova', 'Ertiga', 'Tavera']
-  };
+ 
 
   const nearbyDrivers = await User.find({
     role: 'driver',
     'driver.status': 'online',
     'driver.verificationStatus': 'verified',
-    'driver.vehicle.brand': { $in: categoryMap[type] || [] },
+    'driver.vehicle.brand': { $in: vehicleCategories[type] || [] },
     'driver.location': {
       $near: {
         $geometry: { type: 'Point', coordinates: [pickupLng, pickupLat] },
@@ -270,7 +265,7 @@ const rideOptions = asyncHandler(async (req, res) => {
 
   nearbyDrivers.forEach(driver => {
     const brand = driver.driver?.vehicle?.brand || '';
-    let matchedCategory = 'Economy'; // default fallback
+    let matchedCategory = 'Economy'; 
 
     if (vehicleCategories.Premium.includes(brand)) matchedCategory = 'Premium';
     else if (vehicleCategories.Carpool.includes(brand)) matchedCategory = 'Carpool';
