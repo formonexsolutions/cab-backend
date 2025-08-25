@@ -6,7 +6,14 @@ const Ride = require('../models/Ride');
 const Rating = require('../models/Rating');
 const { findNearestDriver } = require('../services/rideMatching.service');
 const { notifyUser } = require('../services/notification.service');
-
+const { emitToUser } = require('../config/socket');
+const { getDistance } = require('geolib');
+// Example mapping: You can make this dynamic (DB or config file)
+const vehicleCategories = {
+  Economy: ['Suzuki', 'Hyundai', 'Tata', 'Mahindra'],
+  Premium: ['BMW', 'Audi', 'Mercedes', 'Tesla'],
+  Carpool: ['Innova', 'Ertiga', 'Tavera']
+};
 
 
 const nearbyDrivers = asyncHandler(async (req, res) => {
@@ -28,14 +35,105 @@ const nearbyDrivers = asyncHandler(async (req, res) => {
   res.json({ success: true, data: drivers });
 });
 
+// const requestRide = asyncHandler(async (req, res) => {
+//   const { pickup, dropoff,surgeMultiplier = 1, paymentMethod = 'cash' } = req.body;
+
+//   if (!pickup?.location?.coordinates || !dropoff?.location?.coordinates)
+//     return res.status(400).json({ success: false, message: 'pickup/dropoff required' });
+
+//   // Extract coordinates
+//   const [pickupLng, pickupLat] = pickup.location.coordinates;
+//   const [dropoffLng, dropoffLat] = dropoff.location.coordinates;
+
+//   // Calculate distance using geolib (in meters)
+//   const distanceMeters = getDistance(
+//     { latitude: pickupLat, longitude: pickupLng },
+//     { latitude: dropoffLat, longitude: dropoffLng }
+//   );
+//   const distanceKm = distanceMeters / 1000;
+//   // Estimate duration (you can refine with real traffic APIs)
+//   const durationMin = Math.max(10, Math.round(distanceKm * 2)); // example: 2 min/km, min 10 min
+//   const fare = calculateFare({ distanceKm, durationMin, surgeMultiplier });
+
+//   const ride = await Ride.create({
+//     passenger: req.user._id,
+//     pickup,
+//     dropoff,
+//     distanceKm,
+//     durationMin,
+//     surgeMultiplier,
+//     fare,
+//     paymentMethod,
+//     status: 'requested'
+//   });
+
+//   // assign nearest driver
+//   const [lng, lat] = pickup.location.coordinates;
+
+//   const driver = await findNearestDriver({ lng, lat, radiusMeters: 200 }); // start with 200m
+
+//   if (driver) {
+//     ride.driver = driver._id;
+//     ride.status = 'assigned';
+//     await ride.save();
+//     notifyUser(driver._id, { type: 'NEW_RIDE', rideId: ride._id.toString() });
+//   }
+// // notify the driver & passenger
+//       emitToUser(driver._id.toString(), 'ride:new', { rideId: ride._id.toString() });
+//       emitToUser(req.user._id.toString(), 'ride:update', { rideId: ride._id.toString(), status: 'assigned', driver });
+//   res.status(201).json({ success: true, data: ride });
+// });
+
+
 const requestRide = asyncHandler(async (req, res) => {
-  const { pickup, dropoff, distanceKm = 2.5, durationMin = 10, surgeMultiplier = 1, paymentMethod = 'cash' } = req.body;
+  const { pickup, dropoff, type, surgeMultiplier = 1, paymentMethod = 'cash' } = req.body;
 
-  if (!pickup?.location?.coordinates || !dropoff?.location?.coordinates)
-    return res.status(StatusCodes.BAD_REQUEST).json({ success: false, message: 'pickup/dropoff required' });
+  if (!pickup?.location?.coordinates || !dropoff?.location?.coordinates) {
+    return res.status(400).json({ success: false, message: 'pickup/dropoff required' });
+  }
 
+  if (!type) {
+    return res.status(400).json({ success: false, message: 'Ride type is required (Economy, Premium, Carpool)' });
+  }
+
+  // Extract coordinates
+  const [pickupLng, pickupLat] = pickup.location.coordinates;
+  const [dropoffLng, dropoffLat] = dropoff.location.coordinates;
+
+  // Calculate distance & estimated fare
+  const distanceMeters = getDistance(
+    { latitude: pickupLat, longitude: pickupLng },
+    { latitude: dropoffLat, longitude: dropoffLng }
+  );
+  const distanceKm = distanceMeters / 1000;
+  const durationMin = Math.max(10, Math.round(distanceKm * 2));
   const fare = calculateFare({ distanceKm, durationMin, surgeMultiplier });
 
+  // Find nearby drivers by category
+  const categoryMap = {
+    Economy: ['Suzuki', 'Hyundai', 'Tata', 'Mahindra'],
+    Premium: ['BMW', 'Audi', 'Mercedes', 'Tesla'],
+    Carpool: ['Innova', 'Ertiga', 'Tavera']
+  };
+
+  const nearbyDrivers = await User.find({
+    role: 'driver',
+    'driver.status': 'online',
+    'driver.verificationStatus': 'verified',
+    'driver.vehicle.brand': { $in: categoryMap[type] || [] },
+    'driver.location': {
+      $near: {
+        $geometry: { type: 'Point', coordinates: [pickupLng, pickupLat] },
+        $maxDistance: 200 // 200 meters default
+      }
+    }
+  }).select('_id name phone driver.vehicle');
+
+  if (!nearbyDrivers.length) {
+    return res.status(404).json({ success: false, message: 'No drivers available for this category nearby' });
+  }
+
+  // Create ride in requested status (not yet assigned)
   const ride = await Ride.create({
     passenger: req.user._id,
     pickup,
@@ -44,23 +142,36 @@ const requestRide = asyncHandler(async (req, res) => {
     durationMin,
     surgeMultiplier,
     fare,
+    type,
     paymentMethod,
     status: 'requested'
   });
 
-  // assign nearest driver
-  const [lng, lat] = pickup.location.coordinates;
-  const driver = await findNearestDriver({ lng, lat, radiusMeters: 200 }); // start with 200m
-  if (driver) {
-    ride.driver = driver._id;
-    ride.status = 'assigned';
-    await ride.save();
+  // Notify all available drivers of this category
+  nearbyDrivers.forEach(driver => {
     notifyUser(driver._id, { type: 'NEW_RIDE', rideId: ride._id.toString() });
-  }
-// notify the driver & passenger
-      emitToUser(driver._id.toString(), 'ride:new', { rideId: ride._id.toString() });
-      emitToUser(req.user._id.toString(), 'ride:update', { rideId: ride._id.toString(), status: 'assigned', driver });
-  res.status(StatusCodes.CREATED).json({ success: true, data: ride });
+    emitToUser(driver._id.toString(), 'ride:new', {
+      rideId: ride._id.toString(),
+      pickup,
+      dropoff,
+      type,
+      fare,
+      passenger: {
+        id: req.user._id,
+        name: req.user.name,
+        phone: req.user.phone
+      }
+    });
+  });
+
+  // Notify passenger that request is sent
+  emitToUser(req.user._id.toString(), 'ride:update', {
+    rideId: ride._id.toString(),
+    status: 'searching',
+    type
+  });
+
+  res.status(201).json({ success: true, data: ride });
 });
 
 const rideDetails = asyncHandler(async (req, res) => {
@@ -83,6 +194,11 @@ const cancelRide = asyncHandler(async (req, res) => {
   await ride.save();
 
   if (ride.driver) notifyUser(ride.driver, { type: 'RIDE_CANCELLED', rideId: ride._id.toString() });
+
+   if (ride.driver) {
+      emitToUser(ride.driver.toString(), 'ride:cancelled', { rideId: ride._id.toString() });
+    }
+    emitToUser(ride.passenger.toString(), 'ride:update', { rideId: ride._id.toString(), status: 'cancelled' });
   res.json({ success: true, data: ride });
 });
 
@@ -111,11 +227,82 @@ const rateDriver = asyncHandler(async (req, res) => {
   res.json({ success: true, data: rating });
 });
 
+const rideOptions = asyncHandler(async (req, res) => {
+  const { pickup, dropoff, radius = 0.1 } = req.body; // radius = 100m default
+
+  if (!pickup?.location?.coordinates || !dropoff?.location?.coordinates) {
+    return res.status(StatusCodes.BAD_REQUEST).json({
+      success: false,
+      message: 'pickup and dropoff are required'
+    });
+  }
+
+  const [pickupLng, pickupLat] = pickup.location.coordinates;
+  const [dropoffLng, dropoffLat] = dropoff.location.coordinates;
+
+  // Calculate trip distance
+  const distanceMeters = getDistance(
+    { latitude: pickupLat, longitude: pickupLng },
+    { latitude: dropoffLat, longitude: dropoffLng }
+  );
+  const distanceKm = distanceMeters / 1000;
+  const durationMin = Math.max(10, Math.round(distanceKm * 2)); // Estimate
+
+  // Find nearby verified drivers
+  const nearbyDrivers = await User.find({
+    role: 'driver',
+    'driver.status': 'online',
+    'driver.verificationStatus': 'verified',
+    'driver.location': {
+      $near: {
+        $geometry: { type: 'Point', coordinates: [pickupLng, pickupLat] },
+        $maxDistance: Number(radius) * 1000
+      }
+    }
+  }).select('driver.vehicle.brand driver.vehicle.model driver.vehicle.seats');
+
+  // Categorize based on brand
+  const categories = {
+    Economy: [],
+    Premium: [],
+    Carpool: []
+  };
+
+  nearbyDrivers.forEach(driver => {
+    const brand = driver.driver?.vehicle?.brand || '';
+    let matchedCategory = 'Economy'; // default fallback
+
+    if (vehicleCategories.Premium.includes(brand)) matchedCategory = 'Premium';
+    else if (vehicleCategories.Carpool.includes(brand)) matchedCategory = 'Carpool';
+
+    categories[matchedCategory].push(driver);
+  });
+
+  // Generate response
+  const rideOptions = Object.entries(categories).map(([type, drivers]) => {
+    const fare = calculateFare({ distanceKm, durationMin, surgeMultiplier: 1 });
+    return {
+      type,
+      price: `${fare.toFixed(2)}`,
+      eta: `${durationMin} min`,
+      seats: drivers[0]?.driver?.vehicle?.seats || (type === 'Premium' ? 4 : 6),
+      availableDrivers: drivers.length,
+      isPopular: type === 'Premium'
+    };
+  });
+
+  res.status(200).json({
+    success: true,
+    data: rideOptions
+  });
+});
+
 module.exports = {
   nearbyDrivers,
   requestRide,
   rideDetails,
   cancelRide,
   myRides,
-  rateDriver
+  rateDriver,
+  rideOptions
 };

@@ -36,8 +36,6 @@ const {
  *                   example: true
  *                 data:
  *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/User'
  */
 router.get('/users', authMiddleware, listUsers);
 
@@ -62,8 +60,6 @@ router.get('/users', authMiddleware, listUsers);
  *                   example: true
  *                 data:
  *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/User'
  */
 router.get('/drivers', authMiddleware, listDrivers);
 
@@ -101,8 +97,6 @@ router.get('/drivers', authMiddleware, listDrivers);
  *                 success:
  *                   type: boolean
  *                   example: true
- *                 data:
- *                   $ref: '#/components/schemas/User'
  */
 router.post('/drivers/verify', authMiddleware, verifyDriver);
 

@@ -6,7 +6,8 @@ const {
   rideDetails,
   cancelRide,
   myRides,
-  rateDriver
+  rateDriver,
+  rideOptions
 } = require('../controllers/passenger.controller');
 
 const router = express.Router();
@@ -55,7 +56,61 @@ router.get('/nearby-drivers', authMiddleware, nearbyDrivers);
  * @swagger
  * /api/passenger/rides/request:
  *   post:
- *     summary: Request a new ride
+ *     summary: Request a new ride based on category (Economy, Premium, Carpool)
+ *     tags: [Passenger]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [pickup, dropoff, type]
+ *             properties:
+ *               pickup:
+ *                 type: object
+ *                 description: Pickup location details
+ *                 example:
+ *                   address: "MG Road, Pune"
+ *                   location:
+ *                     type: Point
+ *                     coordinates: [73.8567, 18.5204]
+ *               dropoff:
+ *                 type: object
+ *                 description: Dropoff location details
+ *                 example:
+ *                   address: "Shivaji Nagar, Pune"
+ *                   location:
+ *                     type: Point
+ *                     coordinates: [73.8540, 18.5300]
+ *               type:
+ *                 type: string
+ *                 enum: [Economy, Premium, Carpool]
+ *                 description: Ride category
+ *                 example: Premium
+ *     responses:
+ *       201:
+ *         description: Ride created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   description: Ride details
+ */
+router.post('/rides/request', authMiddleware, requestRide);
+
+/**
+ * @swagger
+ * /api/passenger/rides/options:
+ *   post:
+ *     summary: Get available ride options (Economy, Premium, Carpool) based on nearby drivers
  *     tags: [Passenger]
  *     security:
  *       - bearerAuth: []
@@ -69,6 +124,7 @@ router.get('/nearby-drivers', authMiddleware, nearbyDrivers);
  *             properties:
  *               pickup:
  *                 type: object
+ *                 description: "Pickup location details"
  *                 example:
  *                   address: "MG Road, Pune"
  *                   location:
@@ -76,29 +132,22 @@ router.get('/nearby-drivers', authMiddleware, nearbyDrivers);
  *                     coordinates: [73.8567, 18.5204]
  *               dropoff:
  *                 type: object
+ *                 description: "Dropoff location details"
  *                 example:
  *                   address: "Shivaji Nagar, Pune"
  *                   location:
  *                     type: Point
  *                     coordinates: [73.8540, 18.5300]
- *               distanceKm:
+ *               radius:
  *                 type: number
- *                 example: 2.5
- *               durationMin:
- *                 type: number
- *                 example: 10
- *               surgeMultiplier:
- *                 type: number
- *                 example: 1
- *               paymentMethod:
- *                 type: string
- *                 enum: [cash, stripe]
- *                 example: cash
+ *                 description: "Search radius in km. Default: 0.1 km (100 meters)"
+ *                 example: 0.1
  *     responses:
- *       201:
- *         description: Ride created successfully
+ *       200:
+ *         description: Available ride options with fare, ETA, and available drivers
  */
-router.post('/rides/request', authMiddleware, requestRide);
+
+router.post('/rides/options', authMiddleware, rideOptions);
 
 /**
  * @swagger

@@ -11,7 +11,7 @@ const passengerRoutes= require('./app/routes/passenger.routes.js');
 const driverRoutes= require('./app/routes/driver.routes.js');
 const adminRoutes= require('./app/routes/admin.routes.js');
 const paymentRoutes= require('./app/routes/payment.routes.js');
-
+const geocodeRoutes= require('./app/routes/geocodeRoutes.js');
 // const { notFound, errorHandler }= require('./app/middleware/errorMiddleware.js');
 
 
@@ -48,6 +48,7 @@ app.use('/api/passenger', passengerRoutes);
 app.use('/api/driver', driverRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/payment', paymentRoutes);
+app.use('/api/geocode', geocodeRoutes);
 //swagger
 app.use('/api-docs', swaggerUi.serve, (req, res) => {
     userOption(req.query.option)(req, res);

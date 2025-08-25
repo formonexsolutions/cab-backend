@@ -52,19 +52,35 @@ const authMiddleware = require('../middleware/authmiddleware');
  *               license:
  *                 type: string
  *                 format: base64
- *                 description: Base64-encoded driver's license image (required for drivers)
+ *                 description: Base64-encoded driver's license image (optional for drivers at registration)
  *               policeVerification:
  *                 type: string
  *                 format: base64
- *                 description: Base64-encoded police verification document (required for drivers)
+ *                 description: Base64-encoded police verification document (optional for drivers at registration)
  *               carFront:
  *                 type: string
  *                 format: base64
- *                 description: Base64-encoded front image of the car (required for drivers)
+ *                 description: Base64-encoded front image of the car (optional for drivers at registration)
  *               carBack:
  *                 type: string
  *                 format: base64
- *                 description: Base64-encoded back image of the car (required for drivers)
+ *                 description: Base64-encoded back image of the car (optional for drivers at registration)
+ *               vehicle:
+ *                 type: object
+ *                 description: Optional vehicle details for drivers
+ *                 properties:
+ *                   brand:
+ *                     type: string
+ *                     example: "Toyota"
+ *                   model:
+ *                     type: string
+ *                     example: "Innova"
+ *                   color:
+ *                     type: string
+ *                     example: "White"
+ *                   plate:
+ *                     type: string
+ *                     example: "MH12AB1234"
  *     responses:
  *       200:
  *         description: OTP sent successfully
@@ -88,7 +104,7 @@ const authMiddleware = require('../middleware/authmiddleware');
  *               properties:
  *                 message:
  *                   type: string
- *                   example: "Driver documents are required and must be valid base64"
+ *                   example: "Name, phone, role, and email are required"
  *       500:
  *         description: Server error
  *         content:
@@ -100,7 +116,6 @@ const authMiddleware = require('../middleware/authmiddleware');
  *                   type: string
  *                   example: "Server error"
  */
-
 
 router.post('/register', register);
 
@@ -177,7 +192,7 @@ router.get('/auth-user', authMiddleware, getAuthUser);
  * @swagger
  * /api/auth/update:
  *   put:
- *     summary: Update authenticated user profile (with phone OTP flow if number changes)
+ *     summary: Update authenticated user profile (with KYC auto-update and OTP flow if phone changes)
  *     tags: [Authentication]
  *     security:
  *       - bearerAuth: []
@@ -195,25 +210,71 @@ router.get('/auth-user', authMiddleware, getAuthUser);
  *                 type: string
  *                 example: "+919999999999"
  *                 description: If phone is changed, OTP will be sent for verification
+ *               email:
+ *                 type: string
+ *                 example: "johnupdated@example.com"
  *               role:
  *                 type: string
  *                 enum: [passenger, driver, admin]
  *               license:
  *                 type: string
- *                 description: Base64 string for driver license
+ *                 description: Base64 string for driver license (optional)
  *               policeVerification:
  *                 type: string
- *                 description: Base64 string for police verification doc
+ *                 description: Base64 string for police verification doc (optional)
  *               carFront:
  *                 type: string
- *                 description: Base64 string for car front image
+ *                 description: Base64 string for car front image (optional)
  *               carBack:
  *                 type: string
- *                 description: Base64 string for car back image
+ *                 description: Base64 string for car back image (optional)
+ *               vehicle:
+ *                 type: object
+ *                 description: Optional vehicle details for drivers
+ *                 properties:
+ *                   brand:
+ *                     type: string
+ *                     example: "Toyota"
+ *                   model:
+ *                     type: string
+ *                     example: "Innova"
+ *                   color:
+ *                     type: string
+ *                     example: "White"
+ *                   plate:
+ *                     type: string
+ *                     example: "MH12AB1234"
  *     responses:
  *       200:
- *         description: User updated successfully (or OTP sent if phone changed)
+ *         description: User updated successfully or OTP sent if phone changed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "User updated successfully"
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                     name:
+ *                       type: string
+ *                     phone:
+ *                       type: string
+ *                     role:
+ *                       type: string
+ *                     kycStatus:
+ *                       type: boolean
+ *                       example: false
+ *       400:
+ *         description: Invalid data
+ *       500:
+ *         description: Server error
  */
+
 router.put('/update', authMiddleware, updateAuthUser);
 
 

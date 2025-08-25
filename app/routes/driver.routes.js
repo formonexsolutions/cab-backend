@@ -6,7 +6,8 @@ const {
   myAssignedRides,
   acceptRide,
   startRide,
-  completeRide
+  completeRide,
+  verifyOtpAndStartRide
 } = require('../controllers/driver.controller');
 
 const router = express.Router();
@@ -93,8 +94,6 @@ router.put('/location', authMiddleware, updateLocation);
  *                   example: true
  *                 data:
  *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/Ride'
  */
 router.get('/rides', authMiddleware, myAssignedRides);
 
@@ -102,7 +101,7 @@ router.get('/rides', authMiddleware, myAssignedRides);
  * @swagger
  * /api/driver/rides/{id}/accept:
  *   post:
- *     summary: Accept a ride assigned to the driver
+ *     summary: Accept a ride and generate a start OTP
  *     tags: [Driver]
  *     security:
  *       - bearerAuth: []
@@ -115,15 +114,62 @@ router.get('/rides', authMiddleware, myAssignedRides);
  *           type: string
  *     responses:
  *       200:
- *         description: Ride accepted successfully
+ *         description: Ride accepted successfully with OTP
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     _id:
+ *                       type: string
+ *                       example: "64f9a56d89cdef1234567890"
+ *                     status:
+ *                       type: string
+ *                       example: "accepted"
+ *                     startOtp:
+ *                       type: string
+ *                       description: "4-digit OTP for ride start verification"
+ *                       example: "4821"
+ *                     otpExpiry:
+ *                       type: string
+ *                       format: date-time
+ *                       description: "OTP expiry time (10 minutes from generation)"
  */
+
 router.post('/rides/:id/accept', authMiddleware, acceptRide);
+
+// /**
+//  * @swagger
+//  * /api/driver/rides/{id}/start:
+//  *   post:
+//  *     summary: Start the ride
+//  *     tags: [Driver]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     parameters:
+//  *       - name: id
+//  *         in: path
+//  *         required: true
+//  *         description: Ride ID
+//  *         schema:
+//  *           type: string
+//  *     responses:
+//  *       200:
+//  *         description: Ride started successfully
+//  */
+// router.post('/rides/:id/start', authMiddleware, startRide);
 
 /**
  * @swagger
- * /api/driver/rides/{id}/start:
+ * /api/driver/rides/{id}/verify-otp-start:
  *   post:
- *     summary: Start the ride
+ *     summary: Verify OTP and start the ride
  *     tags: [Driver]
  *     security:
  *       - bearerAuth: []
@@ -134,12 +180,47 @@ router.post('/rides/:id/accept', authMiddleware, acceptRide);
  *         description: Ride ID
  *         schema:
  *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [otp]
+ *             properties:
+ *               otp:
+ *                 type: string
+ *                 description: 4-digit OTP received by passenger
+ *                 example: "4821"
  *     responses:
  *       200:
- *         description: Ride started successfully
+ *         description: Ride started successfully after OTP verification
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     _id:
+ *                       type: string
+ *                       example: "64f9a56d89cdef1234567890"
+ *                     status:
+ *                       type: string
+ *                       example: "started"
+ *       400:
+ *         description: Invalid or expired OTP
+ *       403:
+ *         description: Forbidden - Only assigned driver can start ride
+ *       404:
+ *         description: Ride not found
  */
-router.post('/rides/:id/start', authMiddleware, startRide);
 
+router.post('/rides/:id/verify-otp-start', authMiddleware, verifyOtpAndStartRide);
 /**
  * @swagger
  * /api/driver/rides/{id}/complete:

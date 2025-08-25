@@ -15,6 +15,7 @@ const DriverSchema = new mongoose.Schema({
     carFront: String,
     carBack: String
   },
+  kycStatus: { type: Boolean, default: false },
   status: { type: String, enum: ['offline', 'online', 'busy'], default: 'offline' },
   location: {
     type: { type: String, enum: ['Point'], default: 'Point' },

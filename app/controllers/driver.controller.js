@@ -3,7 +3,8 @@ const Ride = require("../models/Ride");
 const asyncHandler = require("../utils/asyncHandler");
 const { notifyUser } = require("../services/notification.service");
 const { emitAll, emitToUser } = require("../config/socket");
-
+const Payment = require("../models/Payment");
+const crypto = require('crypto');
 
 const updateStatus = asyncHandler(async (req, res) => {
   const { status } = req.body; // 'online' | 'offline'
@@ -43,18 +44,36 @@ const myAssignedRides = asyncHandler(async (req, res) => {
   res.json({ success: true, data: rides });
 });
 
+// const acceptRide = asyncHandler(async (req, res) => {
+//   const ride = await Ride.findById(req.params.id);
+//   if (!ride) return res.status(StatusCodes.NOT_FOUND).json({ success: false, message: 'Ride not found' });
+//   if (ride.driver?.toString() !== req.user._id.toString())
+//     return res.status(StatusCodes.FORBIDDEN).json({ success: false, message: 'Not your assignment' });
+//   if (!['assigned', 'requested'].includes(ride.status))
+//     return res.status(StatusCodes.BAD_REQUEST).json({ success: false, message: 'Cannot accept' });
+
+//   ride.status = 'accepted';
+//   await ride.save();
+//   notifyUser(ride.passenger, { type: 'RIDE_ACCEPTED', rideId: ride._id.toString() });
+// emitToUser(ride.passenger.toString(), 'ride:update', { rideId: ride._id.toString(), status: 'accepted' });
+//   res.json({ success: true, data: ride });
+// });
+
 const acceptRide = asyncHandler(async (req, res) => {
   const ride = await Ride.findById(req.params.id);
   if (!ride) return res.status(StatusCodes.NOT_FOUND).json({ success: false, message: 'Ride not found' });
   if (ride.driver?.toString() !== req.user._id.toString())
     return res.status(StatusCodes.FORBIDDEN).json({ success: false, message: 'Not your assignment' });
-  if (!['assigned', 'requested'].includes(ride.status))
-    return res.status(StatusCodes.BAD_REQUEST).json({ success: false, message: 'Cannot accept' });
 
+  const otp = crypto.randomInt(1000, 9999).toString(); // 4-digit OTP
   ride.status = 'accepted';
+  ride.startOtp = otp;
+  ride.otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 min expiry
   await ride.save();
-  notifyUser(ride.passenger, { type: 'RIDE_ACCEPTED', rideId: ride._id.toString() });
-emitToUser(ride.passenger.toString(), 'ride:update', { rideId: ride._id.toString(), status: 'accepted' });
+
+  notifyUser(ride.passenger, { type: 'RIDE_ACCEPTED', otp, rideId: ride._id.toString() });
+  emitToUser(ride.passenger.toString(), 'ride:update', { rideId: ride._id.toString(), status: 'accepted', otp });
+
   res.json({ success: true, data: ride });
 });
 
@@ -68,7 +87,32 @@ const startRide = asyncHandler(async (req, res) => {
   req.user.driver.status = 'busy';
   await Promise.all([ride.save(), req.user.save()]);
   notifyUser(ride.passenger, { type: 'RIDE_STARTED', rideId: ride._id.toString() });
-emitToUser(ride.passenger.toString(), 'ride:update', { rideId: ride._id.toString(), status: 'started' });
+  emitToUser(ride.passenger.toString(), 'ride:update', { rideId: ride._id.toString(), status: 'started' });
+  res.json({ success: true, data: ride });
+});
+
+const verifyOtpAndStartRide = asyncHandler(async (req, res) => {
+  const { otp } = req.body;
+  const ride = await Ride.findById(req.params.id);
+  if (!ride) return res.status(StatusCodes.NOT_FOUND).json({ success: false, message: 'Ride not found' });
+  if (ride.driver?.toString() !== req.user._id.toString())
+    return res.status(StatusCodes.FORBIDDEN).json({ success: false, message: 'Forbidden' });
+
+  if (ride.startOtp !== otp)
+    return res.status(StatusCodes.BAD_REQUEST).json({ success: false, message: 'Invalid OTP' });
+  if (Date.now() > ride.otpExpiry)
+    return res.status(StatusCodes.BAD_REQUEST).json({ success: false, message: 'OTP expired' });
+
+  ride.status = 'started';
+  ride.startOtp = undefined;
+  ride.otpExpiry = undefined;
+  req.user.driver.status = 'busy';
+
+  await Promise.all([ride.save(), req.user.save()]);
+
+  notifyUser(ride.passenger, { type: 'RIDE_STARTED', rideId: ride._id.toString() });
+  emitToUser(ride.passenger.toString(), 'ride:update', { rideId: ride._id.toString(), status: 'started' });
+
   res.json({ success: true, data: ride });
 });
 
@@ -107,5 +151,6 @@ module.exports = {
   myAssignedRides,
   acceptRide,
   startRide,
+  verifyOtpAndStartRide,
   completeRide
 };

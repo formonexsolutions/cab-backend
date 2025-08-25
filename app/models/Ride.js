@@ -24,6 +24,9 @@ const RideSchema = new mongoose.Schema({
   fare: { type: Number, default: 0 },
   surgeMultiplier: { type: Number, default: 1 },
   paymentMethod: { type: String, enum: ['cash', 'card', 'wallet'], default: 'cash' },
+   // ...existing fields
+  startOtp: { type: String },
+  otpExpiry: { type: Date },
   distanceKm: Number,
   durationMin: Number,
   meta: Object
