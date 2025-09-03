@@ -128,6 +128,14 @@ const requestRide = asyncHandler(async (req, res) => {
     return res.status(404).json({ success: false, message: 'No drivers available for this category nearby' });
   }
 
+  const nearbyDriversData = nearbyDrivers.map(driver => ({
+    driver: driver._id,
+    distance: distanceKm, // distance in meters
+    notifiedAt: new Date(),
+    responded: false
+  }));
+ 
+
   // Create ride in requested status (not yet assigned)
   const ride = await Ride.create({
     passenger: req.user._id,
@@ -139,6 +147,7 @@ const requestRide = asyncHandler(async (req, res) => {
     fare,
     type,
     paymentMethod,
+    nearbyDrivers: nearbyDriversData,
     status: 'requested'
   });
 

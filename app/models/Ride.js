@@ -5,6 +5,15 @@ const PointSchema = new mongoose.Schema({
   coordinates: { type: [Number], required: true } // [lng, lat]
 }, { _id: false });
 
+const NearbyDriverSchema = new mongoose.Schema({
+  driver: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  distance: { type: Number }, // distance in meters from pickup
+  notifiedAt: { type: Date, default: Date.now },
+  responded: { type: Boolean, default: false }, // whether they accepted/rejected
+  responseAt: { type: Date }, // when they responded
+  responseType: { type: String, enum: ['accepted', 'rejected', 'timeout'] } // how they responded
+}, { _id: false });
+
 const RideSchema = new mongoose.Schema({
   passenger: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   driver: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -21,6 +30,7 @@ const RideSchema = new mongoose.Schema({
     enum: ['requested', 'assigned', 'accepted', 'arriving', 'started', 'completed', 'cancelled'],
     default: 'requested'
   },
+  nearbyDrivers: [NearbyDriverSchema],
   fare: { type: Number, default: 0 },
   surgeMultiplier: { type: Number, default: 1 },
   paymentMethod: { type: String, enum: ['cash', 'card', 'wallet'], default: 'cash' },

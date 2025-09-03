@@ -59,20 +59,104 @@ const myAssignedRides = asyncHandler(async (req, res) => {
 //   res.json({ success: true, data: ride });
 // });
 
+// Race-condition safe version using atomic update
 const acceptRide = asyncHandler(async (req, res) => {
-  const ride = await Ride.findById(req.params.id);
-  if (!ride) return res.status(StatusCodes.NOT_FOUND).json({ success: false, message: 'Ride not found' });
-  if (ride.driver?.toString() !== req.user._id.toString())
-    return res.status(StatusCodes.FORBIDDEN).json({ success: false, message: 'Not your assignment' });
-
   const otp = crypto.randomInt(1000, 9999).toString(); // 4-digit OTP
-  ride.status = 'accepted';
-  ride.startOtp = otp;
-  ride.otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 min expiry
-  await ride.save();
+  console.log(req.params.id,"req.params.id");
+  console.log(req.user._id,"req.user._id");
+  
+  // Use atomic update to prevent race conditions and track driver response
+  const ride = await Ride.findOneAndUpdate(
+    { 
+      _id: req.params.id, 
+      status: 'requested', // Only accept if still in requested state
+      $or: [
+        { driver: { $exists: false } },
+        { driver: null }
+      ]
+    },
+    { 
+      driver: req.user._id,
+      status: 'accepted',
+      startOtp: otp,
+      otpExpiry: new Date(Date.now() + 10 * 60 * 1000), // 10 min expiry
+      
+      // Update the nearbyDrivers array to mark this driver as responded
+      $set: {
+        'nearbyDrivers.$[elem].responded': true,
+        'nearbyDrivers.$[elem].responseAt': new Date(),
+        'nearbyDrivers.$[elem].responseType': 'accepted'
+      }
+    },
+    { 
+      new: true,
+      arrayFilters: [{ 'elem.driver': req.user._id }] // Only update the current driver's record
+    }
+  ).populate('passenger', 'name phone');
+console.log(ride);
 
-  notifyUser(ride.passenger, { type: 'RIDE_ACCEPTED', otp, rideId: ride._id.toString() });
-  emitToUser(ride.passenger.toString(), 'ride:update', { rideId: ride._id.toString(), status: 'accepted', otp });
+  if (!ride) {
+    return res.status(StatusCodes.CONFLICT).json({ 
+      success: false, 
+      message: 'Ride no longer available or already assigned to another driver' 
+    });
+  }
+
+  // Update other drivers in nearbyDrivers as "missed opportunity" (optional)
+  await Ride.updateOne(
+    { _id: req.params.id },
+    {
+      $set: {
+        'nearbyDrivers.$[elem].responded': true,
+        'nearbyDrivers.$[elem].responseAt': new Date(),
+        'nearbyDrivers.$[elem].responseType': 'timeout'
+      }
+    },
+    {
+      arrayFilters: [
+        { 
+          'elem.driver': { $ne: req.user._id }, // Not the accepting driver
+          'elem.responded': false // Haven't responded yet
+        }
+      ]
+    }
+  );
+
+  // Notify passenger with driver details
+  notifyUser(ride.passenger._id, { 
+    type: 'RIDE_ACCEPTED', 
+    otp, 
+    rideId: ride._id.toString(),
+    driver: {
+      id: req.user._id,
+      name: req.user.name,
+      phone: req.user.phone,
+      vehicle: req.user.driver.vehicle,
+      location: req.user.driver.location
+    }
+  });
+
+  emitToUser(ride.passenger._id.toString(), 'ride:update', { 
+    rideId: ride._id.toString(), 
+    status: 'accepted', 
+    otp,
+    driver: {
+      id: req.user._id,
+      name: req.user.name,
+      phone: req.user.phone,
+      vehicle: req.user.driver.vehicle,
+      location: req.user.driver.location
+    }
+  });
+
+  // Notify other drivers that this ride is no longer available
+  const otherDriverIds = ride.nearbyDrivers
+    .filter(nd => nd.driver.toString() !== req.user._id.toString())
+    .map(nd => nd.driver.toString());
+  
+  otherDriverIds.forEach(driverId => {
+    emitToUser(driverId, 'ride:taken', { rideId: ride._id.toString() });
+  });
 
   res.json({ success: true, data: ride });
 });
