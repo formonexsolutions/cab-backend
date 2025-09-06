@@ -301,6 +301,52 @@ const rideOptions = asyncHandler(async (req, res) => {
   });
 });
 
+const getDriverToPickupDistance = asyncHandler(async (req, res) => {
+  const { rideId } = req.query; // or req.body if you prefer POST
+
+  if (!rideId) {
+    return res.status(StatusCodes.BAD_REQUEST).json({ success: false, message: 'rideId is required' });
+  }
+
+  // Find ride
+  const ride = await Ride.findById(rideId).populate('driver', 'driver.location');
+  if (!ride) {
+    return res.status(StatusCodes.NOT_FOUND).json({ success: false, message: 'Ride not found' });
+  }
+
+  if (!ride.driver) {
+    return res.status(StatusCodes.BAD_REQUEST).json({ success: false, message: 'Driver not assigned to this ride yet' });
+  }
+
+  // Get pickup coordinates
+  const [pickupLng, pickupLat] = ride.pickup.location.coordinates;
+
+  // Get driver location
+  const driverLocation = ride.driver?.driver?.location?.coordinates;
+  if (!driverLocation) {
+    return res.status(StatusCodes.BAD_REQUEST).json({ success: false, message: 'Driver location not available' });
+  }
+
+  const [driverLng, driverLat] = driverLocation;
+
+  // Calculate distance (driver → passenger pickup)
+  const distanceMeters = getDistance(
+    { latitude: driverLat, longitude: driverLng },
+    { latitude: pickupLat, longitude: pickupLng }
+  );
+  const distanceKm = distanceMeters / 1000;
+
+  // Estimate pickup time (assume ~30 km/h => 2 min/km)
+  const estimatedPickupTime = Math.max(3, Math.round(distanceKm * 2)); // Minimum 3 min
+
+  res.status(StatusCodes.OK).json({
+      rideId,
+      distanceKm: distanceKm.toFixed(2),
+      estimatedPickupTime: `${estimatedPickupTime} min`
+    }
+  );
+});
+
 module.exports = {
   nearbyDrivers,
   requestRide,
@@ -308,5 +354,6 @@ module.exports = {
   cancelRide,
   myRides,
   rateDriver,
-  rideOptions
+  rideOptions,
+  getDriverToPickupDistance
 };

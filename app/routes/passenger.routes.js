@@ -7,7 +7,8 @@ const {
   cancelRide,
   myRides,
   rateDriver,
-  rideOptions
+  rideOptions,
+  getDriverToPickupDistance
 } = require('../controllers/passenger.controller');
 
 const router = express.Router();
@@ -237,5 +238,53 @@ router.get('/rides', authMiddleware, myRides);
  *         description: Rating submitted successfully
  */
 router.post('/rides/rate', authMiddleware, rateDriver);
+
+/**
+ * @swagger
+ * /api/passenger/driver-pickup-distance:
+ *   get:
+ *     summary: Get distance and estimated pickup time between driver and passenger
+ *     description: Calculates the distance (in km) and estimated time (in minutes) from the assigned driver to the passenger's pickup location.
+ *     tags: [Rides]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: rideId
+ *         required: true
+ *         description: ID of the ride
+ *         schema:
+ *           type: string
+ *           example: 64f1d4ab12d34c56a7c9ef01
+ *     responses:
+ *       200:
+ *         description: Distance and ETA retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     rideId:
+ *                       type: string
+ *                       example: 64f1d4ab12d34c56a7c9ef01
+ *                     distanceKm:
+ *                       type: string
+ *                       example: "2.35"
+ *                     estimatedPickupTime:
+ *                       type: string
+ *                       example: "5 min"
+ *       400:
+ *         description: Missing rideId or invalid data
+ *       404:
+ *         description: Ride not found or driver not assigned
+ */
+
+router.get('/driver-pickup-distance', authMiddleware, getDriverToPickupDistance);
 
 module.exports = router;
