@@ -179,12 +179,48 @@ const requestRide = asyncHandler(async (req, res) => {
 });
 
 const rideDetails = asyncHandler(async (req, res) => {
-  const ride = await Ride.findById(req.params.id).populate('passenger', 'name phone').populate('driver', 'name phone driver.vehicle driver.location');
-  if (!ride) return res.status(StatusCodes.NOT_FOUND).json({ success: false, message: 'Ride not found' });
-  if (ride.passenger.toString?.() !== req.user._id.toString() && ride.passenger._id?.toString() !== req.user._id.toString())
+  const ride = await Ride.findById(req.params.id).select('-nearbyDrivers')
+    .populate('passenger', 'name phone')
+    .populate('driver', 'name phone driver.vehicle driver.location');
+
+  if (!ride) {
+    return res.status(StatusCodes.NOT_FOUND).json({ success: false, message: 'Ride not found' });
+  }
+
+  if (
+    ride.passenger.toString?.() !== req.user._id.toString() &&
+    ride.passenger._id?.toString() !== req.user._id.toString()
+  ) {
     return res.status(StatusCodes.FORBIDDEN).json({ success: false, message: 'Forbidden' });
-  res.json({ success: true, data: ride });
+  }
+
+  let pickupDistanceKm = null;
+  let estimatedPickupTime = null;
+
+  if (ride.driver?.driver?.location?.coordinates) {
+    const [pickupLng, pickupLat] = ride.pickup.location.coordinates;
+    const [driverLng, driverLat] = ride.driver.driver.location.coordinates;
+
+    const distanceMeters = getDistance(
+      { latitude: driverLat, longitude: driverLng },
+      { latitude: pickupLat, longitude: pickupLng }
+    );
+    pickupDistanceKm = (distanceMeters / 1000).toFixed(2);
+
+    // Assuming ~30 km/h (≈ 2 min/km)
+    estimatedPickupTime = `${Math.max(3, Math.round((distanceMeters / 1000) * 2))} min`;
+  }
+
+  res.json({
+    success: true,
+    data: {
+      ...ride.toObject(),
+      pickupDistanceKm,
+      estimatedPickupTime
+    }
+  });
 });
+
 
 const cancelRide = asyncHandler(async (req, res) => {
   const ride = await Ride.findById(req.params.id);
